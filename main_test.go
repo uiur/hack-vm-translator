@@ -31,7 +31,7 @@ func TestMain(t *testing.T) {
 		out, err := exec.Command(emulatorPath, "fixtures/"+name+".tst").Output()
 
 		if err != nil {
-			t.Error(name+": ", err, string(out))
+			t.Error(name, string(out))
 		}
 	}
 }
