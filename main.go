@@ -81,16 +81,8 @@ D;JGT
 			case "function":
 				name := tokens[1]
 				argNum, _ := strconv.Atoi(tokens[2])
-				result += "\n(" + name + ")\n"
-				result += `
-@SP
-D=M
-@LCL
-M=D
-`
-				for i := 0; i < argNum; i++ {
-					result += push("constant", "0")
-				}
+
+				result += defineFunction(name, argNum)
 			}
 		}
 
@@ -191,6 +183,22 @@ D=M
 A=M
 M=D
 `
+}
+
+func defineFunction(name string, localVarNum int) string {
+	result := fmt.Sprintf(`
+(%s)
+@SP
+D=M
+@LCL
+M=D
+`, name)
+
+	for i := 0; i < localVarNum; i++ {
+		result += push("constant", "0")
+	}
+
+	return result
 }
 
 func loadArgs() string {
