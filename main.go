@@ -23,8 +23,7 @@ func main() {
 
 		code := trimSpace(string(data))
 
-		bootstrap := filename == "fixtures/FibonacciElement.vm"
-
+		bootstrap := os.Getenv("BOOTSTRAP") != "false"
 		result := `
 @256
 D=A
