@@ -55,6 +55,28 @@ func main() {
 				result += binop("|")
 			case "not":
 				result += uniop("!")
+			case "label":
+				name := tokens[1]
+				result += "\n(" + name + ")\n"
+			case "goto":
+				labelName := tokens[1]
+				result += fmt.Sprintf(`
+@%s
+0;JMP
+`, labelName)
+			case "if-goto":
+				labelName := tokens[1]
+				result += fmt.Sprintf(`
+@SP
+M=M-1
+
+@SP
+A=M
+D=M
+
+@%s
+D;JGT
+`, labelName)
 			}
 		}
 
