@@ -38,10 +38,12 @@ func main() {
 			switch operator {
 			case "push":
 				segment := tokens[1]
-				if segment == "constant" {
-					value := tokens[2]
-					result += push(value)
-				}
+				index := tokens[2]
+				result += push(segment, index)
+			case "pop":
+				segment := tokens[1]
+				index := tokens[2]
+				result += pop(segment, index)
 			case "add":
 				result += binop("+")
 			case "sub":
@@ -67,8 +69,18 @@ func main() {
 	}
 }
 
-func push(value string) string {
-	return fmt.Sprintf(`
+var segmentToSymbol = map[string]string{
+	"local":    "LCL",
+	"argument": "ARG",
+	"this":     "THIS",
+	"that":     "THAT",
+	"pointer":  "THIS",
+	"temp":     "R5",
+}
+
+func push(segment, index string) string {
+	if segment == "constant" {
+		return fmt.Sprintf(`
 @%s
 D=A
 @SP
@@ -76,7 +88,76 @@ A=M
 M=D
 @SP
 M=M+1
-`, value)
+`, index)
+	}
+
+	var addressCode string
+	switch segment {
+	case "pointer", "temp":
+		symbol := segmentToSymbol[segment]
+		addressCode = fmt.Sprintf(`
+@%s
+D=A
+@%s
+A=D+A
+D=M
+`, index, symbol)
+	default:
+		symbol := segmentToSymbol[segment]
+		addressCode = fmt.Sprintf(`
+@%s
+D=A
+@%s
+A=D+M
+D=M
+`, index, symbol)
+	}
+
+	return addressCode + `
+@SP
+A=M
+M=D
+
+@SP
+M=M+1
+`
+}
+
+func pop(segment, index string) string {
+	symbol := segmentToSymbol[segment]
+	var addressCode string
+
+	switch segment {
+	case "pointer", "temp":
+		addressCode = fmt.Sprintf(`
+@%s
+D=A
+@%s
+D=A+D
+@R13
+M=D`, index, symbol)
+	default:
+		addressCode = fmt.Sprintf(`
+@%s
+D=A
+@%s
+D=M+D
+@R13
+M=D`, index, symbol)
+	}
+
+	return addressCode + `
+@SP
+M=M-1
+
+@SP
+A=M
+D=M
+
+@R13
+A=M
+M=D
+`
 }
 
 func loadArgs() string {
