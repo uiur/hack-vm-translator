@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,68 +14,83 @@ import (
 
 func main() {
 	if len(os.Args) > 1 {
-		filename := os.Args[1]
-		data, err := ioutil.ReadFile(filename)
+		result := bootstrapCode()
+		for _, filename := range os.Args[1:] {
+			data, err := ioutil.ReadFile(filename)
 
-		if err != nil {
-			fmt.Println(err.Error())
-			os.Exit(1)
+			if err != nil {
+				fmt.Println(err.Error())
+				os.Exit(1)
+			}
+
+			code := trimSpace(string(data))
+			result += generateCode(code, filename)
 		}
+		fmt.Print(result)
+	}
+}
 
-		code := trimSpace(string(data))
-
-		bootstrap := os.Getenv("BOOTSTRAP") != "false"
-		result := `
+func bootstrapCode() string {
+	bootstrap := os.Getenv("BOOTSTRAP") != "false"
+	result := `
 @256
 D=A
 @SP
 M=D
 `
 
-		if bootstrap {
-			result += call("Sys.init", "0")
-		}
+	if bootstrap {
+		result += call("Sys.init", "0")
+	}
 
-		for _, line := range strings.Split(code, "\n") {
-			tokens := strings.Split(line, " ")
-			operator := tokens[0]
+	return result
+}
 
-			switch operator {
-			case "push":
-				segment := tokens[1]
-				index := tokens[2]
-				result += push(segment, index)
-			case "pop":
-				segment := tokens[1]
-				index := tokens[2]
-				result += pop(segment, index)
-			case "add":
-				result += binop("+")
-			case "sub":
-				result += binop("-")
-			case "neg":
-				result += uniop("-")
-			case "eq":
-				result += compare("EQ")
-			case "gt":
-				result += compare("GT")
-			case "lt":
-				result += compare("LT")
-			case "and":
-				result += binop("&")
-			case "or":
-				result += binop("|")
-			case "not":
-				result += uniop("!")
-			case "label":
-				name := tokens[1]
-				result += "\n(" + name + ")\n"
-			case "goto":
-				labelName := tokens[1]
-				result += gotoCode(labelName)
-			case "if-goto":
-				labelName := tokens[1]
-				result += fmt.Sprintf(`
+func generateCode(source, filename string) string {
+	result := ""
+
+	for _, line := range strings.Split(source, "\n") {
+		tokens := strings.Split(line, " ")
+		operator := tokens[0]
+
+		switch operator {
+		case "push":
+			segment := tokens[1]
+			index := tokens[2]
+			name := strings.Split(filepath.Base(filename), ".")[0]
+			result += push(segment, index, name)
+		case "pop":
+			segment := tokens[1]
+			index := tokens[2]
+			name := strings.Split(filepath.Base(filename), ".")[0]
+			result += pop(segment, index, name)
+		case "add":
+			result += binop("+")
+		case "sub":
+			result += binop("-")
+		case "neg":
+			result += uniop("-")
+		case "eq":
+			result += compare("EQ")
+		case "gt":
+			result += compare("GT")
+		case "lt":
+			result += compare("LT")
+		case "and":
+			result += binop("&")
+		case "or":
+			result += binop("|")
+		case "not":
+			result += uniop("!")
+		case "label":
+			name := tokens[1]
+			result += "\n(" + name + ")\n"
+		case "goto":
+			labelName := tokens[1]
+			result += gotoCode(labelName)
+		case "if-goto":
+			labelName := tokens[1]
+			result += fmt.Sprintf(`
 @SP
 M=M-1
 
@@ -85,24 +101,23 @@ D=M
 @%s
 D;JNE
 `, labelName)
-			case "function":
-				name := tokens[1]
-				localVarNum, _ := strconv.Atoi(tokens[2])
+		case "function":
+			name := tokens[1]
+			localVarNum, _ := strconv.Atoi(tokens[2])
 
-				result += defineFunction(name, localVarNum)
+			result += defineFunction(name, localVarNum)
 
-			case "call":
-				funcName := tokens[1]
-				arg := tokens[2]
-				result += call(funcName, arg)
+		case "call":
+			funcName := tokens[1]
+			arg := tokens[2]
+			result += call(funcName, arg)
 
-			case "return":
-				result += returnCode()
-			}
+		case "return":
+			result += returnCode()
 		}
-
-		fmt.Print(result)
 	}
+
+	return result
 }
 
 func pushSymbolAddress(symbol string) string {
@@ -246,7 +261,7 @@ var segmentToSymbol = map[string]string{
 	"temp":     "R5",
 }
 
-func push(segment, index string) string {
+func push(segment, index, filename string) string {
 	var addressCode string
 	switch segment {
 	case "constant":
@@ -265,9 +280,9 @@ D=M
 `, index, symbol)
 	case "static":
 		addressCode = fmt.Sprintf(`
-@a.%s
+@%s.%s
 D=M
-`, index)
+`, filename, index)
 	default:
 		symbol := segmentToSymbol[segment]
 		addressCode = fmt.Sprintf(`
@@ -289,7 +304,7 @@ M=M+1
 `
 }
 
-func pop(segment, index string) string {
+func pop(segment, index, filename string) string {
 	var addressCode string
 	symbol := segmentToSymbol[segment]
 
@@ -303,9 +318,9 @@ D=A+D
 `, index, symbol)
 	case "static":
 		addressCode = fmt.Sprintf(`
-@a.%s
+@%s.%s
 D=A
-`, index)
+`, filename, index)
 	default:
 		addressCode = fmt.Sprintf(`
 @%s
@@ -342,7 +357,7 @@ M=D
 `, name)
 
 	for i := 0; i < localVarNum; i++ {
-		result += push("constant", "0")
+		result += push("constant", "0", "")
 	}
 
 	return result
