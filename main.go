@@ -10,13 +10,6 @@ import (
 	"time"
 )
 
-const setupCode = `
-@256
-D=A
-@SP
-M=D
-`
-
 func main() {
 	if len(os.Args) > 1 {
 		filename := os.Args[1]
@@ -29,7 +22,7 @@ func main() {
 
 		code := trimSpace(string(data))
 
-		result := setupCode
+		result := ""
 
 		for _, line := range strings.Split(code, "\n") {
 			tokens := strings.Split(line, " ")
@@ -79,20 +72,13 @@ var segmentToSymbol = map[string]string{
 }
 
 func push(segment, index string) string {
-	if segment == "constant" {
-		return fmt.Sprintf(`
-@%s
-D=A
-@SP
-A=M
-M=D
-@SP
-M=M+1
-`, index)
-	}
-
 	var addressCode string
 	switch segment {
+	case "constant":
+		addressCode = fmt.Sprintf(`
+@%s
+D=A
+`, index)
 	case "pointer", "temp":
 		symbol := segmentToSymbol[segment]
 		addressCode = fmt.Sprintf(`
@@ -102,6 +88,11 @@ D=A
 A=D+A
 D=M
 `, index, symbol)
+	case "static":
+		addressCode = fmt.Sprintf(`
+@a.%s
+D=M
+`, index)
 	default:
 		symbol := segmentToSymbol[segment]
 		addressCode = fmt.Sprintf(`
@@ -124,8 +115,8 @@ M=M+1
 }
 
 func pop(segment, index string) string {
-	symbol := segmentToSymbol[segment]
 	var addressCode string
+	symbol := segmentToSymbol[segment]
 
 	switch segment {
 	case "pointer", "temp":
@@ -134,19 +125,25 @@ func pop(segment, index string) string {
 D=A
 @%s
 D=A+D
-@R13
-M=D`, index, symbol)
+`, index, symbol)
+	case "static":
+		addressCode = fmt.Sprintf(`
+@a.%s
+D=A
+`, index)
 	default:
 		addressCode = fmt.Sprintf(`
 @%s
 D=A
 @%s
 D=M+D
-@R13
-M=D`, index, symbol)
+`, index, symbol)
 	}
 
 	return addressCode + `
+@R13
+M=D
+
 @SP
 M=M-1
 
