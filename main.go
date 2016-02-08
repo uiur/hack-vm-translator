@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -77,6 +78,19 @@ D=M
 @%s
 D;JGT
 `, labelName)
+			case "function":
+				name := tokens[1]
+				argNum, _ := strconv.Atoi(tokens[2])
+				result += "\n(" + name + ")\n"
+				result += `
+@SP
+D=M
+@LCL
+M=D
+`
+				for i := 0; i < argNum; i++ {
+					result += push("constant", "0")
+				}
 			}
 		}
 
