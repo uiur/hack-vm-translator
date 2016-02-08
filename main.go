@@ -23,7 +23,18 @@ func main() {
 
 		code := trimSpace(string(data))
 
-		result := ""
+		bootstrap := filename == "fixtures/FibonacciElement.vm"
+
+		result := `
+@256
+D=A
+@SP
+M=D
+`
+
+		if bootstrap {
+			result += call("Sys.init", "0")
+		}
 
 		for _, line := range strings.Split(code, "\n") {
 			tokens := strings.Split(line, " ")
@@ -61,10 +72,7 @@ func main() {
 				result += "\n(" + name + ")\n"
 			case "goto":
 				labelName := tokens[1]
-				result += fmt.Sprintf(`
-@%s
-0;JMP
-`, labelName)
+				result += gotoCode(labelName)
 			case "if-goto":
 				labelName := tokens[1]
 				result += fmt.Sprintf(`
@@ -76,18 +84,158 @@ A=M
 D=M
 
 @%s
-D;JGT
+D;JNE
 `, labelName)
 			case "function":
 				name := tokens[1]
-				argNum, _ := strconv.Atoi(tokens[2])
+				localVarNum, _ := strconv.Atoi(tokens[2])
 
-				result += defineFunction(name, argNum)
+				result += defineFunction(name, localVarNum)
+
+			case "call":
+				funcName := tokens[1]
+				arg := tokens[2]
+				result += call(funcName, arg)
+
+			case "return":
+				result += returnCode()
 			}
 		}
 
 		fmt.Print(result)
 	}
+}
+
+func pushSymbolAddress(symbol string) string {
+	return fmt.Sprintf(`
+@%s
+D=M
+
+@SP
+A=M
+M=D
+
+@SP
+M=M+1
+`, symbol)
+}
+
+func gotoCode(name string) string {
+	return fmt.Sprintf(`
+@%s
+0;JMP
+`, name)
+}
+
+func returnCode() string {
+	return `
+@LCL
+D=M
+@R13
+M=D
+
+@5
+D=D-A
+A=D
+D=M
+@R14
+M=D
+
+@SP
+M=M-1
+A=M
+D=M
+@ARG
+A=M
+M=D
+
+@ARG
+D=M
+D=D+1
+@SP
+M=D
+
+@R13
+D=M
+@1
+A=D-A
+D=M
+@THAT
+M=D
+
+@R13
+D=M
+@2
+A=D-A
+D=M
+@THIS
+M=D
+
+@R13
+D=M
+@3
+A=D-A
+D=M
+@ARG
+M=D
+
+@R13
+D=M
+@4
+A=D-A
+D=M
+@LCL
+M=D
+
+@R14
+A=M
+0;JMP
+`
+}
+
+func call(funcName, arg string) string {
+	result := ""
+
+	returnAddressLabel := "return-address." + strconv.Itoa(randNum())
+
+	result += fmt.Sprintf(`
+@%s
+D=A
+
+@SP
+A=M
+M=D
+
+@SP
+M=M+1
+`, returnAddressLabel)
+
+	symbols := []string{"LCL", "ARG", "THIS", "THAT"}
+	for _, symbol := range symbols {
+		result += pushSymbolAddress(symbol)
+	}
+
+	result += fmt.Sprintf(`
+@SP
+D=M
+@5
+D=D-A
+@%s
+D=D-A
+@ARG
+M=D
+`, arg)
+
+	result += `
+@SP
+D=M
+@LCL
+M=D
+`
+	result += gotoCode(funcName)
+	result += "\n(" + returnAddressLabel + ")\n"
+
+	return result
 }
 
 var segmentToSymbol = map[string]string{
